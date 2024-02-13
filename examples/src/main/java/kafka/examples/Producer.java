@@ -29,11 +29,15 @@ public class Producer extends Thread {
     private final String topic;
     private final Boolean isAsync;
 
+    /**
+     * 构造方法，初始化生产者对象
+     */
     public Producer(String topic, Boolean isAsync) {
         Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
         props.put("client.id", "DemoProducer");
         props.put("key.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
+        // 对消息进行序列化，在消费的时候，需要对消息进行反序列化
         props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         producer = new KafkaProducer<>(props);
         this.topic = topic;
@@ -46,10 +50,12 @@ public class Producer extends Thread {
             String messageStr = "Message_" + messageNo;
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
+                // 异步发送
                 producer.send(new ProducerRecord<>(topic,
                     messageNo,
                     messageStr), new DemoCallBack(startTime, messageNo, messageStr));
             } else { // Send synchronously
+                // 同步发送
                 try {
                     producer.send(new ProducerRecord<>(topic,
                         messageNo,
@@ -88,11 +94,13 @@ class DemoCallBack implements Callback {
     public void onCompletion(RecordMetadata metadata, Exception exception) {
         long elapsedTime = System.currentTimeMillis() - startTime;
         if (metadata != null) {
+            // 发送成功
             System.out.println(
                 "message(" + key + ", " + message + ") sent to partition(" + metadata.partition() +
                     "), " +
                     "offset(" + metadata.offset() + ") in " + elapsedTime + " ms");
         } else {
+            // 发送失败
             exception.printStackTrace();
         }
     }

@@ -63,6 +63,7 @@ public final class RecordBatch {
      * 
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
+    // batch.tryAppend(timestamp, key, value, callback, time.milliseconds())
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
@@ -89,10 +90,29 @@ public final class RecordBatch {
      * @param exception The exception that occurred (or null if the request was successful)
      */
     public void done(long baseOffset, long timestamp, RuntimeException exception) {
+        /**
+         *
+         * 响应消息的流转流程：
+         * 1. 将响应消息从服务端接收，并存储在 networkReceive 里面
+         * 2. 将 networkReceive 缓存到 stagedReceives 里面
+         * 3. 将 networkReceive 从 stagedReceives 取出，存入 completedReceives 中
+         * 4. 遍历 completedReceives 中的 networkReceive，
+         *    根据 networkReceive 初始化 ClientResponse，将 ClientResponse 存储到 responses 中
+         * 5. 调用请求中的回调函数处理响应
+         * 6. handleProduceResponse 真正处理网络响应
+         * 7. completeBatch 处理网络响应
+         * 8. batch.done() 处理网络响应
+         * 9. 执行用户定义的回调函数
+         */
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition,
                   baseOffset,
                   exception);
+        /**
+         * final private static class Thunk {}
+         * this.thunks = new ArrayList<Thunk>();
+         * Thunk 表示一条用于封装的消息
+         */
         // execute callbacks
         for (int i = 0; i < this.thunks.size(); i++) {
             try {
@@ -144,19 +164,41 @@ public final class RecordBatch {
         boolean expire = false;
         String errorMessage = null;
 
+        /**
+         * this.inRetry() 返回当前 batch 是否正在重试
+         *
+         * requestTimeoutMs
+         * timeout.ms 默认值：30 * 1000
+         * request.timeout.ms 默认值：30 * 1000
+         *
+         * now - this.lastAppendTime 当前时间 - 最后入队时间
+         */
         if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime)) {
             expire = true;
             errorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
+        /**
+         * this.createdMs 当前 batch 的初始化时间，也就是创建时间
+         * lingerMs 消息发送的时候，如果一直凑不齐一个 batch，也会限定一个时间，
+         *          要求在这个限定时间之内即使不满足一个 batch，也要把这个 batch 发送出去
+         */
         } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
             expire = true;
             errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
+        /**
+         * this.lastAttemptMs 上一次重试的时间
+         * retryBackoffMs 表示生产者生产消息的重试时间间隔
+         */
         } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
             expire = true;
             errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
         }
 
         if (expire) {
+            // 如果超时
             this.records.close();
+            /**
+             * TimeoutException 异常
+             */
             this.done(-1L, Record.NO_TIMESTAMP,
                       new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + errorMessage));
         }

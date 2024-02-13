@@ -46,6 +46,9 @@ public final class BufferPool {
     private final long totalMemory;
     private final int poolableSize;
     private final ReentrantLock lock;
+    /**
+     * free 是一个队列，队列里面存储的就是内存空间
+     */
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
     private long availableMemory;
@@ -61,12 +64,19 @@ public final class BufferPool {
      * @param metrics instance of Metrics
      * @param time time instance
      * @param metricGrpName logical group name for metrics
+     * 
+     * 初始化内存池
+     * totalSize 内存池的大小，默认是 32 MB
+     * batchSize 批次大小，默认是 16 KB
+     * new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
      */
     public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
+        // 批次大小，默认是 16 KB
         this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<ByteBuffer>();
         this.waiters = new ArrayDeque<Condition>();
+        // 内存池的大小，默认是 32 MB
         this.totalMemory = memory;
         this.availableMemory = memory;
         this.metrics = metrics;
@@ -98,12 +108,23 @@ public final class BufferPool {
 
         this.lock.lock();
         try {
+            /**
+             * 如果申请的内存大小和批次大小相同，并且内存池中已经有分配好的内存了
+             * 直接返回第一块已经存在于内存池中的内存即可
+             *
+             * 内存池中存在已经分配好的内存主要发生在分配之后再回收的情况，此时内存池中就已经有分配好的内存
+             */
             // check if we have a free buffer of the right size pooled
             if (size == poolableSize && !this.free.isEmpty())
                 return this.free.pollFirst();
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
+            /**
+             * this.availableMemory 表示 totalSize 内存池中剩余还没有分配的内存
+             * freeListSize 表示已经分配，存在于队列中还没有使用的内存
+             * 所以 this.availableMemory + freeListSize 就是目前所有空闲的内存大小
+             */
             int freeListSize = this.free.size() * this.poolableSize;
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
@@ -111,6 +132,9 @@ public final class BufferPool {
                 freeUp(size);
                 this.availableMemory -= size;
                 lock.unlock();
+                /**
+                 * 从操作系统中申请内存
+                 */
                 return ByteBuffer.allocate(size);
             } else {
                 // we are out of memory and will have to block
@@ -118,14 +142,27 @@ public final class BufferPool {
                 ByteBuffer buffer = null;
                 Condition moreMemory = this.lock.newCondition();
                 long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
+                /**
+                 * 内存池中的内存不足，等待别人释放内存
+                 */
                 this.waiters.addLast(moreMemory);
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
+                /**
+                 * 总的思路是，可能一下子分配不了那么大的内存，那么久一点一点的分配
+                 * accumulated 表示已经分配的内存
+                 * size 表示需要的内存
+                 * 如果 accumulated < size 就一直循环等待别人释放内存，自己分配到足够的内存
+                 */
                 while (accumulated < size) {
                     long startWaitNs = time.nanoseconds();
                     long timeNs;
                     boolean waitingTimeElapsed;
                     try {
+                        /**
+                         * 阻塞等待别人释放内存
+                         * 因此如果有内存释放，那么释放内存的那个线程一定会唤醒这个还在等待中的线程
+                         */
                         waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
                     } catch (InterruptedException e) {
                         this.waiters.remove(moreMemory);
@@ -137,6 +174,9 @@ public final class BufferPool {
                     }
 
                     if (waitingTimeElapsed) {
+                        /**
+                         * 等待超时，释放已经分配的内存，抛出异常
+                         */
                         this.waiters.remove(moreMemory);
                         throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
                     }
@@ -144,6 +184,9 @@ public final class BufferPool {
                     remainingTimeToBlockNs -= timeNs;
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
+                    /**
+                     * 有人释放了内存，唤醒了这个线程，所以下面的代码就回收一部分内存
+                     */
                     if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
                         // just grab a buffer from the free list
                         buffer = this.free.pollFirst();
@@ -187,6 +230,9 @@ public final class BufferPool {
     /**
      * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
      * buffers (if needed)
+     * 释放队列中已经分配的内存，使可用内存增大
+     * 这里也说明并不是一开始就直接申请一个 totalSize 内存大小的内存，申请内存也是直接从系统内存申请
+     * totalSize、availableMemory 这些只不过是用来记录内存总览和可用内存大小，并不代表实际就存在这么多内存，这些只是数字而已
      */
     private void freeUp(int size) {
         while (!this.free.isEmpty() && this.availableMemory < size)
@@ -205,13 +251,19 @@ public final class BufferPool {
         lock.lock();
         try {
             if (size == this.poolableSize && size == buffer.capacity()) {
+                // 将 buffer 代表的内存单元里面的内容清空
                 buffer.clear();
+                // 将满足条件的内存单元放入内存池代表的队列
                 this.free.add(buffer);
             } else {
+                // 如果不满足条件，直接将内存单元还到可用内存里面，不放入队列中
                 this.availableMemory += size;
             }
             Condition moreMem = this.waiters.peekFirst();
             if (moreMem != null)
+                /**
+                 * 释放内存之后，唤醒阻塞等待的线程
+                 */
                 moreMem.signal();
         } finally {
             lock.unlock();

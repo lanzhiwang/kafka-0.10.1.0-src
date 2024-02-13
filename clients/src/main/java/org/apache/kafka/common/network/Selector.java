@@ -80,14 +80,45 @@ public class Selector implements Selectable {
     public static final long NO_IDLE_TIMEOUT_MS = -1;
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
+    /**
+     * java.nio.channels.Selector 功能是负责网络连接的建立，发送网络请求，接收网络响应
+     * this.nioSelector = java.nio.channels.Selector.open();
+     */
     private final java.nio.channels.Selector nioSelector;
+    /**
+     * channels 使用 map 数据结构维护每个 broker 和 KafkaChannel 的映射关系
+     * KafkaChannel 类似于 socketChannel，表示一个网络连接
+     *
+     * this.channels = new HashMap<>();
+     */
     private final Map<String, KafkaChannel> channels;
+    /**
+     * completedSends 表示已经完成发送的网络请求
+     * this.completedSends = new ArrayList<>();
+     */
     private final List<Send> completedSends;
+    /**
+     * completedReceives 表示已经接收到，并且已经处理完成的响应
+     * this.completedReceives = new ArrayList<>();
+     */
     private final List<NetworkReceive> completedReceives;
+    /**
+     * 一个连接可能有多个响应，所以一个连接对应一个队列，队列中有多个响应
+     * stagedReceives 表示每个连接的响应，但是这些响应还没有处理
+     */
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
+    /**
+     * 没有建立连接的 Node
+     */
     private final List<String> disconnected;
+    /**
+     * 完成建立连接的 Node
+     */
     private final List<String> connected;
+    /**
+     * 建立连接失败的 Node
+     */
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
@@ -141,6 +172,23 @@ public class Selector implements Selectable {
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
     }
 
+    /**
+     *
+    new Selector(
+        config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+        this.metrics,
+        time,
+        "producer",
+        channelBuilder
+    ),
+     * CONNECTIONS_MAX_IDLE_MS_CONFIG
+     * connections.max.idle.ms
+     * Close idle connections after the number of milliseconds specified by this config. 网络连接的空闲时间，超过空闲时间，该连接会被关闭
+     * 默认值：9 * 60 * 1000
+     *
+     * channelBuilder
+     * ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+     */
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
     }
@@ -163,7 +211,13 @@ public class Selector implements Selectable {
         if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
 
+        /**
+         * 获取 SocketChannel
+         */
         SocketChannel socketChannel = SocketChannel.open();
+        /**
+         * 将 SocketChannel 设置为非阻塞的模式
+         */
         socketChannel.configureBlocking(false);
         Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
@@ -171,9 +225,23 @@ public class Selector implements Selectable {
             socket.setSendBufferSize(sendBufferSize);
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
+        /**
+         * 是否开启 Nagle 算法功能
+         * 默认是开启的，开启之后，他会把网络中的一些小包组合成大包发送出去
+         * 因为他认为大量的小包会造成网络阻塞
+         *
+         * kafka 这里设置为 true，也就是不开启 Nagle 算法功能
+         * 因为 kafka 要发送的数据包就是比较小
+         */
         socket.setTcpNoDelay(true);
         boolean connected;
         try {
+            /**
+             * 尝试与服务器进行连接
+             * 因为设置了 SocketChannel 为非阻塞的模式
+             * 因此可能很快就可以建立连接，返回 true
+             * 也有可能很久才能连接成功，返回 false
+             */
             connected = socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
             socketChannel.close();
@@ -182,15 +250,34 @@ public class Selector implements Selectable {
             socketChannel.close();
             throw e;
         }
+        /**
+         * socketChannel 往 nioSelector 注册了一个网络连接事件 OP_CONNECT
+         */
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
+        /**
+         * 根据 socketChannel 封装一个 KafkaChannel
+         */
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        /**
+         * 将 key 与 KafkaChannel 关联起来
+         * 后续可以通过 key 找到 KafkaChannel
+         * 也可以通过 KafkaChannel 找到 key
+         */
         key.attach(channel);
+        /**
+         * channels 使用 map 数据结构维护每个 broker 和 KafkaChannel 的映射关系
+         */
         this.channels.put(id, channel);
 
         if (connected) {
             // OP_CONNECT won't trigger for immediately connected channels
             log.debug("Immediately connected to node {}", channel.id());
             immediatelyConnectedKeys.add(key);
+            /**
+             * 如果连接成功，取消前面注册的 OP_CONNECT 事件
+             *
+             * 正常情况下，网络连接是无法完成连接的，因此肯定有其他地方完成最后的网络连接
+             */
             key.interestOps(0);
         }
     }
@@ -237,8 +324,14 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(Send send) {
+        /**
+         * 获取 KafkaChannel
+         */
         KafkaChannel channel = channelOrFail(send.destination());
         try {
+            /**
+             * 往 KafkaChannel 里面存储一个网络请求
+             */
             channel.setSend(send);
         } catch (CancelledKeyException e) {
             this.failedSends.add(send.destination());
@@ -283,15 +376,37 @@ public class Selector implements Selectable {
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
+        /**
+         * 从 Selector 上找到有多少 key 已经注册了
+         *
+         * 初始化网络连接时已经注册了相应事件
+         * Initiate a connection to the given node
+         * socketChannel 往 nioSelector 注册了一个网络连接事件 OP_CONNECT
+         *
+         * 后面也会注册 read 和 write 事件
+         * read 事件负责接收网络响应
+         * write 事件负责发送网络请求
+         */
         int readyKeys = select(timeout);
         long endSelect = time.nanoseconds();
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
+            /**
+             * pollSelectionKeys 方法处理所有注册的 key
+             */
             pollSelectionKeys(this.nioSelector.selectedKeys(), false, endSelect);
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
         }
 
+        /**
+         * 响应消息的流转流程：
+         * 1. 将响应消息从服务端接收，并存储在 networkReceive 里面
+         * 2. 将 networkReceive 缓存到 stagedReceives 里面
+         * 3. 将 networkReceive 从 stagedReceives 取出，存入 completedReceives 中
+         *
+         *
+         */
         addToCompletedReceives();
 
         long endIo = time.nanoseconds();
@@ -309,6 +424,9 @@ public class Selector implements Selectable {
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
             iterator.remove();
+            /**
+             * 根据 key 找到对应的 KafkaChannel
+             */
             KafkaChannel channel = channel(key);
 
             // register all per-connection metrics at once
@@ -318,8 +436,15 @@ public class Selector implements Selectable {
 
             try {
 
+                /**
+                 * 处理连接事件
+                 */
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 if (isImmediatelyConnected || key.isConnectable()) {
+                    /**
+                     * channel.finishConnect() 完成最后的网络连接
+                     * 将完成的网络连接保存到 this.connected 里面
+                     */
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
@@ -337,15 +462,40 @@ public class Selector implements Selectable {
                 if (channel.isConnected() && !channel.ready())
                     channel.prepare();
 
+                /**
+                 * 处理 read 事件
+                 */
                 /* if channel is ready read from any connections that have readable data */
                 if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
                     NetworkReceive networkReceive;
+                    /**
+                     * 接收服务端的响应
+                     * 对于服务端来说，返回响应也就是向客户端发送了一个请求
+                     * 服务端的请求中可能包含之前对个客户端请求的响应，这时就会有粘包和拆包的问题
+                     *
+                     * networkReceive 代表服务端发送回来的一个响应
+                     * 响应消息的流转流程：
+                     * 1. 将响应消息从服务端接收，并存储在 networkReceive 里面
+                     */
                     while ((networkReceive = channel.read()) != null)
+                        /**
+                         * 生产者处理接收的响应
+                         * 响应消息的流转流程：
+                         * 1. 将响应消息从服务端接收，并存储在 networkReceive 里面
+                         * 2. 将 networkReceive 缓存到 stagedReceives 里面
+                         */
                         addToStagedReceives(channel, networkReceive);
                 }
 
+                /**
+                 * 处理 write 事件
+                 */
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
                 if (channel.ready() && key.isWritable()) {
+                    /**
+                     * channel.write() 发送网络请求，并且有一个返回值
+                     * 这个返回值不是网络的请求响应
+                     */
                     Send send = channel.write();
                     if (send != null) {
                         this.completedSends.add(send);
@@ -558,6 +708,15 @@ public class Selector implements Selectable {
      * adds a receive to staged receives
      */
     private void addToStagedReceives(KafkaChannel channel, NetworkReceive receive) {
+        /**
+         * 响应消息的流转流程：
+         * 1. 将响应消息从服务端接收，并存储在 networkReceive 里面
+         * 2. 将 networkReceive 缓存到 stagedReceives 里面
+         *
+         * channel 代表一个网络连接，一个 kafka broker 就对应一个网络连接
+         * private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
+         * stagedReceives 表示每个连接的响应，但是这些响应还没有处理，也就是将刚接收到的响应换成到 stagedReceives
+         */
         if (!stagedReceives.containsKey(channel))
             stagedReceives.put(channel, new ArrayDeque<NetworkReceive>());
 
@@ -569,6 +728,17 @@ public class Selector implements Selectable {
      * checks if there are any staged receives and adds to completedReceives
      */
     private void addToCompletedReceives() {
+        /**
+         * 响应消息的流转流程：
+         * 1. 将响应消息从服务端接收，并存储在 networkReceive 里面
+         * 2. 将 networkReceive 缓存到 stagedReceives 里面
+         * 3. 将 networkReceive 从 stagedReceives 取出，存入 completedReceives 中
+         *
+         * completedReceives
+         * private final List<NetworkReceive> completedReceives;
+         * this.completedReceives = new ArrayList<>();
+         *
+         */
         if (!this.stagedReceives.isEmpty()) {
             Iterator<Map.Entry<KafkaChannel, Deque<NetworkReceive>>> iter = this.stagedReceives.entrySet().iterator();
             while (iter.hasNext()) {
@@ -577,6 +747,9 @@ public class Selector implements Selectable {
                 if (!channel.isMute()) {
                     Deque<NetworkReceive> deque = entry.getValue();
                     NetworkReceive networkReceive = deque.poll();
+                    /**
+                     * 将 networkReceive 从 stagedReceives 取出，存入 completedReceives 中
+                     */
                     this.completedReceives.add(networkReceive);
                     this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
                     if (deque.isEmpty())

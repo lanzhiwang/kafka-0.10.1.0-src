@@ -36,6 +36,16 @@ final class ClusterConnectionStates {
      * @return true if we can initiate a new connection
      */
     public boolean canConnect(String id, long now) {
+        /**
+         * canConnect 返回是否可以初始化一个网络连接
+         * 如果返回 true，
+         * 说明缓存 nodeState中没有对应的连接，
+         * 或者缓存中有连接，但连接已经处于断开状态，ConnectionState.DISCONNECTED
+         * 并且缓存中有连接，但连接最后的使用的时间太长了 now - state.lastConnectAttemptMs >= this.reconnectBackoffMs;
+         *
+         * this.nodeState = new HashMap<String, NodeConnectionState>();
+         * 从缓存 nodeState 中找到对应 node 的网络连接
+         */
         NodeConnectionState state = nodeState.get(id);
         if (state == null)
             return true;
@@ -110,6 +120,9 @@ final class ClusterConnectionStates {
      */
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
+        /**
+         * 修改缓存在 connectionStates 中的连接的连接状态
+         */
         nodeState.state = ConnectionState.DISCONNECTED;
         nodeState.lastConnectAttemptMs = now;
     }

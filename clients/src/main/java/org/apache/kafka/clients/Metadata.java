@@ -50,13 +50,40 @@ public final class Metadata {
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
 
+    /**
+     * 两次更新元数据的时间间隔，也就是第一次更新失败后，第二次更新的时间间隔
+     * 默认值是 100ms
+     */
     private final long refreshBackoffMs;
+    /**
+     * 多久自动更新一次元数据
+     * 默认值是 5min
+     */
     private final long metadataExpireMs;
+    /**
+     * 每次更新元数据，version 都会被修改
+     */
     private int version;
+    /**
+     * 上一次更新元数据的时间
+     */
     private long lastRefreshMs;
+    /**
+     * 上一次成功更新元数据的时间
+     * 正常情况下，如果每次元数据都更新成功，那么 lastRefreshMs = lastSuccessfulRefreshMs
+     */
     private long lastSuccessfulRefreshMs;
+    /**
+     * kafka 集群本身的元数据
+     */
     private Cluster cluster;
+    /**
+     * 用于表示是否需要更新元数据
+     */
     private boolean needUpdate;
+    /**
+     * 记录当前已有的 topic
+     */
     /* Topics with expiry time */
     private final Map<String, Long> topics;
     private final List<Listener> listeners;
@@ -147,11 +174,27 @@ public final class Metadata {
         if (maxWaitMs < 0) {
             throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
         }
+        // 获取当前时间
         long begin = System.currentTimeMillis();
+        // 剩余时间，初始值是最大等待时间
         long remainingWaitMs = maxWaitMs;
+        /**
+         * 如果当前 version(this.version) 小于等于上次 version
+         * 说明元数据没有被更新
+         * 因为如果 sender 线程获取到了元数据，那么 sender 一定会累加 version
+         */
         while (this.version <= lastVersion) {
             if (remainingWaitMs != 0)
+                /**
+                 * 阻塞等待当前线程
+                 * 如果 sender 线程更新元数据成功，那么 sender 线程一定会唤醒当前线程
+                 */
                 wait(remainingWaitMs);
+            /**
+             * 当前线程被唤醒后或者剩余等待时间到点
+             * 那么计算更新元数据实际花费的时间
+             * 此时元数据更新可能成功，可能失败
+             */
             long elapsed = System.currentTimeMillis() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
@@ -199,9 +242,17 @@ public final class Metadata {
         this.needUpdate = false;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
+        /**
+         * 更新元数据的版本
+         */
         this.version += 1;
 
+        // topicExpiryEnabled true
         if (topicExpiryEnabled) {
+            /**
+             * 初始化 producer 时没有 topic，所以 topic 为空
+             * 执行 producer.send() 时有 topic 信息，所以 topic 不为空
+             */
             // Handle expiry of topics from the metadata refresh set.
             for (Iterator<Map.Entry<String, Long>> it = topics.entrySet().iterator(); it.hasNext(); ) {
                 Map.Entry<String, Long> entry = it.next();
@@ -220,12 +271,17 @@ public final class Metadata {
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
+        // needMetadataForAllTopics false
         if (this.needMetadataForAllTopics) {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
             this.cluster = getClusterForCurrentTopics(cluster);
         } else {
+            /**
+             * cluster 代码 kafka 集群的元数据
+             * Producer 初始化时，update 方法没有去服务端拉取数据
+             */
             this.cluster = cluster;
         }
 
@@ -236,7 +292,9 @@ public final class Metadata {
                 log.info("Cluster ID: {}", cluster.clusterResource().clusterId());
             clusterResourceListeners.onUpdate(cluster.clusterResource());
         }
-
+        /**
+         * 唤醒其他被阻塞的线程
+         */
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
     }

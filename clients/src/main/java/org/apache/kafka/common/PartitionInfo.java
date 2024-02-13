@@ -17,10 +17,26 @@ package org.apache.kafka.common;
  */
 public class PartitionInfo {
 
+    /**
+     * The topic name
+     */
     private final String topic;
+    /**
+     * The partition id
+     */
     private final int partition;
+    /**
+     * The node id of the node currently acting as a leader for this partition or null if there is no leader
+     */
     private final Node leader;
+    /**
+     * The complete set of replicas for this partition regardless of whether they are alive or up-to-date
+     */
     private final Node[] replicas;
+    /**
+     * The subset of the replicas that are in sync, that is caught-up to the leader and ready to take over as leader if
+     * the leader should fail
+     */
     private final Node[] inSyncReplicas;
 
     public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {

@@ -134,6 +134,14 @@ final class InFlightRequests {
      */
     public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
         List<String> nodeIds = new LinkedList<>();
+        /**
+         * requestTimeoutMs
+         * timeout.ms 默认值：30 * 1000
+         * request.timeout.ms 默认值：30 * 1000
+         *
+         * private final Map<String, Deque<ClientRequest>> requests = new HashMap<>();
+         * map 中的 key 表示 nodeId
+         */
         for (Map.Entry<String, Deque<ClientRequest>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
             Deque<ClientRequest> deque = requestEntry.getValue();

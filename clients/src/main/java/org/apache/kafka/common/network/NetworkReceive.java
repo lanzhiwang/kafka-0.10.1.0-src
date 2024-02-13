@@ -76,8 +76,28 @@ public class NetworkReceive implements Receive {
     // This can go away after we get rid of BlockingChannel
     @Deprecated
     public long readFromReadableChannel(ReadableByteChannel channel) throws IOException {
+        /**
+         * 处理粘包和拆包问题
+         *
+         * 粘包问题解决方法
+         * [50][body1][60][body2]
+         * 4 + 50 + 4 + 60
+         *
+         * 拆包问题解决方法
+         * 4 字节的 50 不是从同一个网络包中返回的，类似 5 0
+         * 同理 50 字节的 body1 也不是从同一个网络包中返回的，类型 bo dy1
+         */
         int read = 0;
+        /**
+         * this.size = ByteBuffer.allocate(4); size 是大小 4 byte，也就是一个 int 类型的大小
+         *
+         * size.hasRemaining() 返回 size 是否还有剩余空间，用于处理拆包问题
+         * size.hasRemaining() 返回 true 表示还没有读满 4 个字节
+         */
         if (size.hasRemaining()) {
+            /**
+             * 读取 4 字节的数据到 size 里面
+             */
             int bytesRead = channel.read(size);
             if (bytesRead < 0)
                 throw new EOFException();
@@ -90,6 +110,9 @@ public class NetworkReceive implements Receive {
                 if (maxSize != UNLIMITED && receiveSize > maxSize)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + " larger than " + maxSize + ")");
 
+                /**
+                 * 分配 size 值大小的内存空间
+                 */
                 this.buffer = ByteBuffer.allocate(receiveSize);
             }
         }

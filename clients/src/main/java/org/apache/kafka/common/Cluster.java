@@ -30,14 +30,58 @@ import java.util.Set;
 public final class Cluster {
 
     private final boolean isBootstrapConfigured;
+    /**
+     * kafka 集群节点
+     */
     private final List<Node> nodes;
+    /**
+     * 未授权的 topic
+     */
     private final Set<String> unauthorizedTopics;
     private final Set<String> internalTopics;
+    /**
+     *
+     * TopicPartition：A topic name and partition number
+     *      private final int partition;
+     *      private final String topic;
+     *
+     * PartitionInfo：Information about a topic-partition
+     *      private final String topic;
+     *      private final int partition;
+     *      private final Node leader;
+     *      private final Node[] replicas;
+     *      private final Node[] inSyncReplicas;
+     *
+     * Node：Information about a Kafka node
+     *      private final int id;
+     *      private final String idString;
+     *      private final String host;
+     *      private final int port;
+     *      private final String rack;
+     *
+     */
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+    // 一个 topic 对应的分区信息
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    // 一个 topic 对应的可用分区信息
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
+    // 分区和 broker id 之间的关系
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
+    /**
+     *
+     * Node：Information about a Kafka node
+     *      private final int id;
+     *      private final String idString;
+     *      private final String host;
+     *      private final int port;
+     *      private final String rack;
+     *
+     */
     private final Map<Integer, Node> nodesById;
+    /**
+     * ClusterResource：class encapsulates metadata for a Kafka cluster.
+     * private final String clusterId;
+     */
     private final ClusterResource clusterResource;
 
     /**
