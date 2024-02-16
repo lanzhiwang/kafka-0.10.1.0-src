@@ -65,5 +65,9 @@ $
 
 # 服务端
 
-
-
+1. kafka 服务端源码包结构
+2. kafka 服务端 Acceptor 线程是如何启动的
+3. kafka 服务端 Processor 线程是如何启动的
+4. kafka 服务端 Processor 线程是如何接受请求的并处理请求数据的
+5. kafka 服务端是如何处理 requestQueue 队列中中的请求的
+6. 

@@ -51,44 +51,75 @@ public final class Metadata {
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
 
     /**
+     * 重试的时间间隔
      * 两次更新元数据的时间间隔，也就是第一次更新失败后，第二次更新的时间间隔
      * 默认值是 100ms
      */
     private final long refreshBackoffMs;
+
     /**
+     * 生产者每隔一段时间要去更新一下元数据 默认值：5 * 60 * 1000
      * 多久自动更新一次元数据
      * 默认值是 5min
      */
     private final long metadataExpireMs;
+
     /**
      * 每次更新元数据，version 都会被修改
+     * this.version = 0;
      */
     private int version;
+
     /**
      * 上一次更新元数据的时间
+     * this.lastRefreshMs = 0L;
      */
     private long lastRefreshMs;
+
     /**
      * 上一次成功更新元数据的时间
      * 正常情况下，如果每次元数据都更新成功，那么 lastRefreshMs = lastSuccessfulRefreshMs
+     * this.lastSuccessfulRefreshMs = 0L;
      */
     private long lastSuccessfulRefreshMs;
+
     /**
      * kafka 集群本身的元数据
+     * this.cluster = Cluster.empty();
      */
     private Cluster cluster;
+
     /**
      * 用于表示是否需要更新元数据
+     * this.needUpdate = false;
      */
     private boolean needUpdate;
+
     /**
      * 记录当前已有的 topic
+     * this.topics = new HashMap<>();
      */
     /* Topics with expiry time */
     private final Map<String, Long> topics;
+
+    /**
+     * this.listeners = new ArrayList<>();
+     */
     private final List<Listener> listeners;
+
+    /**
+     * this.clusterResourceListeners = clusterResourceListeners;
+     */
     private final ClusterResourceListeners clusterResourceListeners;
+
+    /**
+     * this.needMetadataForAllTopics = false;
+     */
     private boolean needMetadataForAllTopics;
+
+    /**
+     * true
+     */
     private final boolean topicExpiryEnabled;
 
     /**
@@ -110,6 +141,14 @@ public final class Metadata {
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
+    // retryBackoffMs 重试的时间间隔
+    // metadata.max.age.ms 生产者每隔一段时间要去更新一下元数据 默认值：5 * 60 * 1000
+    // this.metadata=new Metadata(
+    //     retryBackoffMs,
+    //     config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+    //     true,
+    //     clusterResourceListeners
+    // )
     public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;

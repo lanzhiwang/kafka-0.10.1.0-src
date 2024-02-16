@@ -141,6 +141,16 @@ public class Selector implements Selectable {
      * @param metricsPerConnection Whether or not to enable per-connection metrics
      * @param channelBuilder Channel builder for every new connection
      */
+    // this(
+    //     NetworkReceive.UNLIMITED,
+    //     connectionMaxIdleMS,
+    //     metrics,
+    //     time,
+    //     metricGrpPrefix,
+    //     new HashMap<String,String>(),
+    //     true,
+    //     channelBuilder
+    // )
     public Selector(int maxReceiveSize,
                     long connectionMaxIdleMs,
                     Metrics metrics,
@@ -189,6 +199,13 @@ public class Selector implements Selectable {
      * channelBuilder
      * ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
      */
+    // new Selector(
+    //     config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+    //     this.metrics,
+    //     time,
+    //     "producer",
+    //     channelBuilder
+    // )
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
     }
@@ -288,6 +305,10 @@ public class Selector implements Selectable {
      * Note that we are not checking if the connection id is valid - since the connection already exists
      */
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
+        /**
+         * 在 SocketChannel 上注册 OP_READ 事件
+         * 然后 Processor 线程就可以读取客户端请求中的数据了
+         */
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);

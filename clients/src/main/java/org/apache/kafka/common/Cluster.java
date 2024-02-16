@@ -30,15 +30,19 @@ import java.util.Set;
 public final class Cluster {
 
     private final boolean isBootstrapConfigured;
+
     /**
      * kafka 集群节点
      */
     private final List<Node> nodes;
+
     /**
      * 未授权的 topic
      */
     private final Set<String> unauthorizedTopics;
+
     private final Set<String> internalTopics;
+
     /**
      *
      * TopicPartition：A topic name and partition number
@@ -61,12 +65,16 @@ public final class Cluster {
      *
      */
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+
     // 一个 topic 对应的分区信息
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+
     // 一个 topic 对应的可用分区信息
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
+
     // 分区和 broker id 之间的关系
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
+
     /**
      *
      * Node：Information about a Kafka node
@@ -78,6 +86,7 @@ public final class Cluster {
      *
      */
     private final Map<Integer, Node> nodesById;
+
     /**
      * ClusterResource：class encapsulates metadata for a Kafka cluster.
      * private final String clusterId;
@@ -103,6 +112,13 @@ public final class Cluster {
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
+    // new Cluster(
+    //     null,
+    //     new ArrayList<Node>(0),
+    //     new ArrayList<PartitionInfo>(0),
+    //     Collections.<String>emptySet(),
+    //     Collections.<String>emptySet()
+    // );
     public Cluster(String clusterId,
                    Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
@@ -111,18 +127,40 @@ public final class Cluster {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, internalTopics);
     }
 
+    // this(
+    //     clusterId,
+    //     false,
+    //     nodes,
+    //     partitions,
+    //     unauthorizedTopics,
+    //     internalTopics
+    // );
+    // new Cluster(
+    //     null,
+    //     true,
+    //     nodes,
+    //     new ArrayList<PartitionInfo>(0),
+    //     Collections.<String>emptySet(),
+    //     Collections.<String>emptySet()
+    // );
     private Cluster(String clusterId,
                     boolean isBootstrapConfigured,
                     Collection<Node> nodes,
                     Collection<PartitionInfo> partitions,
                     Set<String> unauthorizedTopics,
                     Set<String> internalTopics) {
+        /**
+         * false
+         */
         this.isBootstrapConfigured = isBootstrapConfigured;
+
         this.clusterResource = new ClusterResource(clusterId);
+
         // make a randomized, unmodifiable copy of the nodes
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
+
         this.nodesById = new HashMap<>();
         for (Node node : nodes)
             this.nodesById.put(node.id(), node);

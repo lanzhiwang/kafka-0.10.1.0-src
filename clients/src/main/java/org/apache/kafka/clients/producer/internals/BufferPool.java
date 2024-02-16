@@ -43,16 +43,47 @@ import org.apache.kafka.common.utils.Time;
  */
 public final class BufferPool {
 
+    /**
+     * totalSize 内存池的大小，默认是 32 MB
+     * this.totalMemory = memory;
+     */
     private final long totalMemory;
+
+    /**
+     * batchSize 批次大小，默认是 16 KB
+     */
     private final int poolableSize;
+
+    /**
+     * this.lock = new ReentrantLock();
+     */
     private final ReentrantLock lock;
+
     /**
      * free 是一个队列，队列里面存储的就是内存空间
+     * this.free = new ArrayDeque<ByteBuffer>();
      */
     private final Deque<ByteBuffer> free;
+
+    /**
+     * this.waiters = new ArrayDeque<Condition>();
+     */
     private final Deque<Condition> waiters;
+
+    /**
+     * 初始时 this.availableMemory = this.totalMemory
+     * this.availableMemory = memory;
+     */
     private long availableMemory;
+
+    /**
+     * this.metrics = metrics;
+     */
     private final Metrics metrics;
+
+    /**
+     * this.waitTime = this.metrics.sensor("bufferpool-wait-time");
+     */
     private final Time time;
     private final Sensor waitTime;
 
@@ -70,6 +101,13 @@ public final class BufferPool {
      * batchSize 批次大小，默认是 16 KB
      * new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
      */
+    // this.free=new BufferPool(
+    //     totalSize,
+    //     batchSize,
+    //     metrics,
+    //     time,
+    //     metricGrpName
+    // )
     public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
         // 批次大小，默认是 16 KB
         this.poolableSize = poolableSize;

@@ -30,12 +30,20 @@ object KafkaServerStartable {
 }
 
 class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter]) extends Logging {
+  /**
+   * TODO KafkaServer
+   * class KafkaServer() extends Logging with KafkaMetricsGroup {}
+   *
+   */
   private val server = new KafkaServer(serverConfig, kafkaMetricsReporters = reporters)
 
   def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)
 
   def startup() {
     try {
+      /**
+       * TODO KafkaServer 启动
+       */
       server.startup()
     }
     catch {

@@ -82,6 +82,9 @@ public class KafkaChannel {
     }
 
     public void mute() {
+        /**
+         * 在 selector 上移除 OP_READ 事件
+         */
         transportLayer.removeInterestOps(SelectionKey.OP_READ);
     }
 

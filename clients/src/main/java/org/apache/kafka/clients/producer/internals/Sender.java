@@ -98,6 +98,19 @@ public class Sender implements Runnable {
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
 
+    // this.sender=new Sender(
+    //     client,
+    //     this.metadata,
+    //     this.accumulator,
+    //     config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)==1,
+    //     config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
+    //     (short)parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
+    //     config.getInt(ProducerConfig.RETRIES_CONFIG),
+    //     this.metrics,
+    //     new SystemTime(),
+    //     clientId,
+    //     this.requestTimeoutMs
+    // );
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
@@ -192,6 +205,7 @@ public class Sender implements Runnable {
          *      获取元数据
          */
         Cluster cluster = metadata.fetch();
+
         /**
          * 步骤二：
          *      从 RecordAccumulator 获取已经准备好的 batch

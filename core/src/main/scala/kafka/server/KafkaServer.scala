@@ -173,6 +173,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   )
 
   /**
+   * kafka 服务端的所有核心流程
+   *
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
@@ -215,6 +217,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         metadataCache = new MetadataCache(config.brokerId)
 
+        /**
+         * TODO NIO socket 服务端
+         * import kafka.network.{BlockingChannel, SocketServer}
+         * class SocketServer() extends Logging with KafkaMetricsGroup {}
+         */
         socketServer = new SocketServer(config, metrics, kafkaMetricsTime)
         socketServer.startup()
 
@@ -244,6 +251,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,
           kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers, clusterId)
 
+        /**
+         * 处理 requestQueue 队列中的请求
+         *
+         * class KafkaRequestHandlerPool() extends Logging with KafkaMetricsGroup {}
+         * KafkaRequestHandlerPool 对象的初始化函数初始化了 KafkaRequestHandler 对象
+         * KafkaRequestHandler 对象是 class KafkaRequestHandler() extends Runnable with Logging {}
+         * socketServer.requestChannel
+         */
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
 
         Mx4jLoader.maybeLoad()

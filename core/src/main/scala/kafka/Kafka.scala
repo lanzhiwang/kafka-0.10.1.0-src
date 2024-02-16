@@ -54,7 +54,16 @@ object Kafka extends Logging {
 
   def main(args: Array[String]): Unit = {
     try {
+      /**
+       * 解析 args 参数
+       * 这里的参数不是 kafka 的配置选项
+       */
       val serverProps = getPropsFromArgs(args)
+      /**
+       * TODO KafkaServerStartable
+       * import kafka.server.{KafkaServer, KafkaServerStartable}
+       * class KafkaServerStartable() extends Logging {}
+       */
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
       // attach shutdown handler to catch control-c
@@ -64,6 +73,9 @@ object Kafka extends Logging {
         }
       })
 
+      /**
+       * TODO KafkaServerStartable 启动
+       */
       kafkaServerStartable.startup
       kafkaServerStartable.awaitShutdown
     }

@@ -184,6 +184,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
      * @param properties   The producer configs
      */
+    // producer = new KafkaProducer<>(props);
     public KafkaProducer(Properties properties) {
         this(new ProducerConfig(properties), null, null);
     }
@@ -202,6 +203,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
              keySerializer, valueSerializer);
     }
 
+    // this(new ProducerConfig(properties), null, null);
     @SuppressWarnings({"unchecked", "deprecation"})
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
@@ -215,6 +217,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
+
             // metric 相关
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
             metricTags.put("client-id", clientId);
@@ -225,17 +228,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     MetricsReporter.class);
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
+
             /**
              * 设置分区器
              * kafka 默认提供了分区器，也可以自定义分区器
              */
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
+
             /**
              * retry.backoff.ms
              * 生产者生产消息的重试时间间隔
              * 默认值是 100L
              */
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+
             /**
              * key 序列化器
              */
@@ -247,6 +253,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
                 this.keySerializer = keySerializer;
             }
+
             /**
              * value 序列化器
              */
@@ -261,6 +268,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             // load interceptors and make sure they get clientId
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+
             /**
              * 设置拦截器
              * 拦截器的作用类似于过滤器
@@ -270,33 +278,39 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
 
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer, valueSerializer, interceptorList, reporters);
+
             /**
              * kafka broker 集群元数据
              * retryBackoffMs 重试的时间间隔
              * metadata.max.age.ms 生产者每隔一段时间要去更新一下元数据 默认值：5 * 60 * 1000
              */
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG), true, clusterResourceListeners);
+
             /**
              * max.request.size
              * 每条消息的最大值
              * 默认是：1 * 1024 * 1024
              */
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
+
             /**
              * buffer.memory
              * 生产者 RecordAccumulator 缓存的大小
              * 默认值是：32 * 1024 * 1024L
              */
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
+
             /**
              * compression.type
              * 压缩类型
              * 默认不压缩
              */
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+
             /* check for user defined settings.
              * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
              * This should be removed with release 0.9 when the deprecated configs are removed.
+             * maxBlockTimeMs
              */
             if (userProvidedConfigs.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
                 log.warn(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG + " config is deprecated and will be removed soon. " +
@@ -322,6 +336,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             /* check for user defined settings.
              * If the TIME_OUT config is set use that for request timeout.
              * This should be removed with release 0.9
+             * requestTimeoutMs
              */
             if (userProvidedConfigs.containsKey(ProducerConfig.TIMEOUT_CONFIG)) {
                 log.warn(ProducerConfig.TIMEOUT_CONFIG + " config is deprecated and will be removed soon. Please use " +
@@ -368,14 +383,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     metrics,
                     time);
 
-            /**
-             * TODO 更新元数据
-             */
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             /**
-             * TODO Producer 初始化时，update 方法没有去服务端拉取数据
+             * TODO 更新元数据
+             * Producer 初始化时，update 方法没有去服务端拉取数据
              */
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
+
             /**
              * TODO 初始化网络组件
              *
@@ -412,6 +426,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                     this.requestTimeoutMs, time);
+
             /**
              * TODO 初始化 sender 组件
              * public class Sender implements Runnable

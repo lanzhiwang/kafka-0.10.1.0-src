@@ -1,4 +1,7 @@
 {
 	// Enable/disable default Java formatter
-	"java.format.enabled": false
+	"java.format.enabled": false,
+	"files.watcherExclude": {
+		"**/target": true
+	}
 }
